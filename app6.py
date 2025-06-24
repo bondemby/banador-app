@@ -3,7 +3,18 @@ from PIL import Image, ImageEnhance
 import numpy as np
 import os
 
-st.set_page_config(page_title="Bañadores IA", layout="wide")
+# Configuración de página con sidebar siempre visible
+st.set_page_config(page_title="Bañadores IA", layout="wide", initial_sidebar_state="expanded")
+
+# CSS para fijar altura de imagen
+st.markdown("""
+    <style>
+    img {
+        max-height: 500px !important;
+        height: auto;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # Directorios
 MODELOS_DIR = "modelos"
@@ -42,7 +53,7 @@ if "reset" not in st.session_state:
 if st.sidebar.button("🔄 Reset valores"):
     st.session_state.reset = True
 
-# Sliders con mismos rangos que app5.py
+# Sliders con rangos de app5.py
 sombra = st.sidebar.slider(
     "Sombras (0 = sin sombras, 1.25 = sombras marcadas)", 0.0, 1.25,
     value=DEFAULT_VALUES["Sombras"] if st.session_state.reset else st.session_state.get("sombra", DEFAULT_VALUES["Sombras"]),
@@ -113,6 +124,6 @@ st.markdown("## Resultado")
 if patron_file:
     patron_img = Image.open(patron_file).convert("RGB")
     resultado = aplicar_patron(modelo_img, mascara_img, patron_img, sombra, color_boost, contraste, repeticion)
-    st.image(resultado, use_container_width=True)
+    st.image(resultado, use_column_width=True)
 else:
-    st.image(modelo_img, caption="Esperando patrón...", use_container_width=True)
+    st.image(modelo_img, caption="Esperando patrón...", use_column_width=True)
