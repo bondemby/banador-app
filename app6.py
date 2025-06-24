@@ -42,29 +42,29 @@ if "reset" not in st.session_state:
 if st.sidebar.button("🔄 Reset valores"):
     st.session_state.reset = True
 
-# Sliders con valores reactivos
+# Sliders con mismos rangos que app5.py
 sombra = st.sidebar.slider(
-    "Sombras", 0.5, 1.25,
+    "Sombras (0 = sin sombras, 1.25 = sombras marcadas)", 0.0, 1.25,
     value=DEFAULT_VALUES["Sombras"] if st.session_state.reset else st.session_state.get("sombra", DEFAULT_VALUES["Sombras"]),
-    step=0.05, key="sombra"
+    step=0.01, key="sombra"
 )
 
 color_boost = st.sidebar.slider(
-    "Color Boost", 0.5, 3.0,
+    "Color Boost (viveza)", 0.8, 3.0,
     value=DEFAULT_VALUES["Color Boost"] if st.session_state.reset else st.session_state.get("color_boost", DEFAULT_VALUES["Color Boost"]),
-    step=0.25, key="color_boost"
+    step=0.05, key="color_boost"
 )
 
 contraste = st.sidebar.slider(
-    "Contraste", 0.5, 4.0,
+    "Contraste final (solo en el bañador)", 0.5, 4.0,
     value=DEFAULT_VALUES["Contraste"] if st.session_state.reset else st.session_state.get("contraste", DEFAULT_VALUES["Contraste"]),
-    step=0.25, key="contraste"
+    step=0.05, key="contraste"
 )
 
 repeticion = st.sidebar.slider(
-    "Tamaño patrón", 1, 10,
+    "Tamaño del patrón (1 = grande, 10 = pequeño)", 1, 10,
     value=DEFAULT_VALUES["Tamaño patrón"] if st.session_state.reset else st.session_state.get("repeticion", DEFAULT_VALUES["Tamaño patrón"]),
-    key="repeticion"
+    step=1, key="repeticion"
 )
 
 # Reset de bandera
@@ -73,26 +73,40 @@ if st.session_state.reset:
 
 # Función para aplicar patrón
 def aplicar_patron(modelo, mascara, patron, sombras, boost, contrast, tile_scale):
-    modelo_np = np.array(modelo).astype(np.float32)
-    mascara_np = np.array(mascara) / 255.0
+    modelo_np = np.array(modelo).astype(np.float32) / 255.0
+    mascara_np = np.array(mascara).astype(np.float32) / 255.0
 
-    # Crear patrón en mosaico
-    patron = patron.resize((modelo.width // tile_scale, modelo.height // tile_scale))
-    mosaico = Image.new("RGB", modelo.size)
-    for x in range(0, modelo.width, patron.width):
-        for y in range(0, modelo.height, patron.height):
-            mosaico.paste(patron, (x, y))
-    mosaico = mosaico.crop((0, 0, modelo.width, modelo.height))
+    pattern_width = max(8, int(modelo.size[0] / tile_scale))
+    pattern_height = max(8, int(modelo.size[1] / tile_scale))
+    patron_resized = patron.resize((pattern_width, pattern_height))
 
-    # Ajustes visuales
-    mosaico = ImageEnhance.Color(mosaico).enhance(boost)
-    mosaico = ImageEnhance.Contrast(mosaico).enhance(contrast)
-    mosaico_np = np.array(mosaico).astype(np.float32)
+    patron_mosaic = Image.new("RGB", modelo.size)
+    for y in range(0, modelo.size[1], patron_resized.height):
+        for x in range(0, modelo.size[0], patron_resized.width):
+            patron_mosaic.paste(patron_resized, (x, y))
+    patron_mosaic = patron_mosaic.crop((0, 0, modelo.size[0], modelo.size[1]))
 
-    # Combinar con sombra
-    out_np = modelo_np * (1 - mascara_np[..., None] * sombras) + mosaico_np * (mascara_np[..., None])
-    out_np = np.clip(out_np, 0, 255).astype(np.uint8)
-    return Image.fromarray(out_np)
+    patron_mosaic = ImageEnhance.Brightness(patron_mosaic).enhance(1.1)
+    patron_mosaic = ImageEnhance.Contrast(patron_mosaic).enhance(1.1)
+
+    patron_np = np.array(patron_mosaic).astype(np.float32) / 255.0
+
+    gray_np = np.mean(modelo_np, axis=2)
+    light_map = np.stack([gray_np]*3, axis=2)
+    adjusted_light_map = (1 - sombras) + sombras * light_map
+    blended_pattern = patron_np * adjusted_light_map
+    enhanced_pattern = np.clip(blended_pattern ** (1 / boost), 0, 1)
+
+    contrasted_pattern = 0.5 + contrast * (enhanced_pattern - 0.5)
+    contrasted_pattern = np.clip(contrasted_pattern, 0, 1)
+
+    mask_rgb = np.stack([mascara_np]*3, axis=2)
+    banador_np = contrasted_pattern * mask_rgb
+    fondo_np = modelo_np * (1 - mask_rgb)
+    result_np = fondo_np + banador_np
+
+    result_img = Image.fromarray((np.clip(result_np, 0, 1) * 255).astype(np.uint8))
+    return result_img
 
 # Mostrar resultado
 st.markdown("## Resultado")
