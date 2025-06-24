@@ -3,20 +3,21 @@ from PIL import Image, ImageEnhance
 import numpy as np
 import os
 
-# Configuración de página con sidebar siempre visible
+# Configuración de página con sidebar abierto
 st.set_page_config(page_title="Bañadores IA", layout="wide", initial_sidebar_state="expanded")
 
-# CSS para fijar altura de imagen
+# CSS para altura máxima sin distorsión
 st.markdown("""
     <style>
     img {
         max-height: 500px !important;
         height: auto;
+        width: auto;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# Directorios
+# Directorios donde se almacenan modelos y máscaras
 MODELOS_DIR = "modelos"
 MASCARAS_DIR = "mascaras"
 
@@ -28,12 +29,12 @@ DEFAULT_VALUES = {
     "Tamaño patrón": 2,
 }
 
-# Cargar modelos predefinidos
+# Cargar modelos y máscaras
 modelos = sorted([f for f in os.listdir(MODELOS_DIR) if f.endswith(('.jpg', '.png'))])
 mascaras = sorted([f for f in os.listdir(MASCARAS_DIR) if f.endswith(('.png'))])
 
-# Selector gráfico de modelos
-st.sidebar.header("Selecciona modelo")
+# Sidebar - selección de modelo
+st.sidebar.header("🧍 Selecciona modelo")
 modelo_idx = st.sidebar.selectbox("Modelo", range(len(modelos)), format_func=lambda i: modelos[i])
 
 modelo_path = os.path.join(MODELOS_DIR, modelos[modelo_idx])
@@ -42,18 +43,18 @@ mascara_path = os.path.join(MASCARAS_DIR, mascaras[modelo_idx])
 modelo_img = Image.open(modelo_path).convert("RGB")
 mascara_img = Image.open(mascara_path).convert("L").resize(modelo_img.size)
 
-# Subir patrón
-st.sidebar.markdown("### Sube un patrón")
-patron_file = st.sidebar.file_uploader("Imagen del patrón", type=["jpg", "jpeg", "png"])
+# Subida de patrón
+st.sidebar.markdown("🎨 **Sube un patrón de bañador**")
+patron_file = st.sidebar.file_uploader("Archivo", type=["jpg", "jpeg", "png"])
 
-# Estado para resetear
+# Reset de sliders
 if "reset" not in st.session_state:
     st.session_state.reset = False
 
 if st.sidebar.button("🔄 Reset valores"):
     st.session_state.reset = True
 
-# Sliders con rangos de app5.py
+# Sliders con mismo rango que app5.py
 sombra = st.sidebar.slider(
     "Sombras (0 = sin sombras, 1.25 = sombras marcadas)", 0.0, 1.25,
     value=DEFAULT_VALUES["Sombras"] if st.session_state.reset else st.session_state.get("sombra", DEFAULT_VALUES["Sombras"]),
@@ -78,11 +79,11 @@ repeticion = st.sidebar.slider(
     step=1, key="repeticion"
 )
 
-# Reset de bandera
+# Quitar estado de reset después de aplicar
 if st.session_state.reset:
     st.session_state.reset = False
 
-# Función para aplicar patrón
+# Función principal para aplicar el patrón
 def aplicar_patron(modelo, mascara, patron, sombras, boost, contrast, tile_scale):
     modelo_np = np.array(modelo).astype(np.float32) / 255.0
     mascara_np = np.array(mascara).astype(np.float32) / 255.0
@@ -119,11 +120,11 @@ def aplicar_patron(modelo, mascara, patron, sombras, boost, contrast, tile_scale
     result_img = Image.fromarray((np.clip(result_np, 0, 1) * 255).astype(np.uint8))
     return result_img
 
-# Mostrar resultado
+# Mostrar resultado o imagen base
 st.markdown("## Resultado")
 if patron_file:
     patron_img = Image.open(patron_file).convert("RGB")
     resultado = aplicar_patron(modelo_img, mascara_img, patron_img, sombra, color_boost, contraste, repeticion)
-    st.image(resultado, use_column_width=True)
+    st.image(resultado, output_format="PNG", caption="Resultado generado", clamp=True)
 else:
-    st.image(modelo_img, caption="Esperando patrón...", use_column_width=True)
+    st.image(modelo_img, output_format="PNG", caption="Esperando patrón...", clamp=True)
